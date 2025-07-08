@@ -1,0 +1,33 @@
+
+version: "3.8"
+services:
+  redis:
+    image: redis:7.2-alpine
+    ports: ["6379:6379"]
+
+  ratelimiter:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    environment:
+      - REDIS_HOST=redis
+      - BIND_ADDR=0.0.0.0:50051
+    depends_on:
+      - redis
+    ports:
+      - "50051:50051"
+      - "9102:9102"
+
+  prometheus:
+    image: prom/prometheus:v2.52.0
+    volumes:
+      - ./docker/prometheus.yml:/etc/prometheus/prometheus.yml
+    ports: ["9090:9090"]
+
+  grafana:
+    image: grafana/grafana-oss:10.4.2
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    volumes:
+      - ./grafana:/var/lib/grafana
+    ports: ["3000:3000"]

@@ -1,0 +1,34 @@
+{
+  "uid": "rate-limiter",
+  "title": "Rate Limiter Metrics",
+  "schemaVersion": 30,
+  "version": 1,
+  "panels": [
+    {
+      "type": "graph",
+      "title": "Requests / Denied",
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "ratelimiter_requests_total",
+          "legendFormat": "requests"
+        },
+        {
+          "expr": "ratelimiter_denied_total",
+          "legendFormat": "denied"
+        }
+      ]
+    },
+    {
+      "type": "graph",
+      "title": "Latency ms",
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.99, rate(ratelimiter_latency_ms_bucket[1m]))",
+          "legendFormat": "p99"
+        }
+      ]
+    }
+  ]
+}

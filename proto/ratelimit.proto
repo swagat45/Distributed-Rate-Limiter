@@ -1,0 +1,18 @@
+
+syntax = "proto3";
+package ratelimiter;
+
+service RateLimiter {
+  rpc CheckQuota (RateLimitRequest) returns (RateLimitReply);
+}
+
+message RateLimitRequest {
+  string key = 1;
+  int32 hits = 2;
+}
+
+message RateLimitReply {
+  bool allowed = 1;
+  int32 remaining = 2;
+  int64 reset_after_ms = 3;
+}
