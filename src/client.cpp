@@ -17,11 +17,12 @@ int main(int argc,char** argv){
         grpc::ClientContext ctx;
         auto status=stub->CheckQuota(&ctx,req,&resp);
         if(status.ok()){
-            std::cout<<"allowed "<<resp.allowed()<<" rem "<<resp.remaining()<<"
-";
+            std::cout << "Request " << (i+1) << ": allowed=" << resp.allowed() 
+                      << " remaining=" << resp.remaining() 
+                      << " reset_after_ms=" << resp.reset_after_ms() << std::endl;
         }else{
-            std::cerr<<"rpc fail
-";
+            std::cerr << "Error: " << status.error_message() << std::endl;
         }
     }
+    return 0;
 }

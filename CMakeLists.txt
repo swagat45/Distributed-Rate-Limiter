@@ -37,6 +37,6 @@ endif()
 
 enable_testing()
 file(GLOB TEST_SRC tests/*.cpp)
-add_executable(unit_tests ${TEST_SRC} src/token_bucket.cpp)
+add_executable(unit_tests ${TEST_SRC})
 target_link_libraries(unit_tests PRIVATE GTest::gtest_main)
 add_test(NAME unit COMMAND unit_tests)

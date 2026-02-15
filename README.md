@@ -29,6 +29,20 @@
 
 ---
 
+## 🐛 Recent Fixes & Improvements
+
+The codebase has been debugged and hardened with the following improvements:
+
+- ✅ **Token Bucket Implementation** – Complete token-bucket algorithm with proper time-based refill
+- ✅ **Lua Script Correctness** – Fixed reset-time calculations for accurate quota reporting  
+- ✅ **Metrics Stability** – Resolved use-after-free bugs in Prometheus metric pointers
+- ✅ **Redis Resilience** – Added connection timeouts (1.5s) and comprehensive error handling
+- ✅ **Type Safety** – Added reply type validation and connection state checks
+- ✅ **Client Clarity** – Improved output formatting with field labels and error messages
+- ✅ **Build Configuration** – Fixed CMakeLists.txt to properly include all dependencies
+
+---
+
 ## 🏗 Architecture (high level)
 
 ```
@@ -97,9 +111,17 @@ grpcurl -d '{"key":"user123","hits":1}' localhost:50051 \
 
 ```
 Distributed-Rate-Limiter/
-├─ proto/               ▶ rate-limit.proto
-├─ src/                 ▶ server.cpp, token_bucket.*, redis_store.*, raft_store.*
-├─ tests/               ▶ gTest unit cases
+├─ proto/               ▶ ratelimit.proto (gRPC service definition)
+├─ src/
+│  ├─ server.cpp                 ▶ gRPC server with Prometheus metrics
+│  ├─ ratelimiter_service_impl.*  ▶ CheckQuota RPC implementation
+│  ├─ token_bucket.h             ▶ Token-bucket algorithm (in-memory reference)
+│  ├─ redis_store.*              ▶ Redis backend with atomic Lua scripts
+│  ├─ metrics.*                  ▶ Prometheus counter/histogram collectors
+│  ├─ backend_interface.h        ▶ ITokenStore abstraction
+│  ├─ client.cpp                 ▶ Example gRPC client
+│  └─ raft_store.* (optional)    ▶ Raft-backed store (enabled with -DWITH_RAFT=ON)
+├─ tests/               ▶ Google-Test unit cases
 ├─ docker/              ▶ Dockerfile, prometheus.yml
 ├─ grafana/dashboards/  ▶ Grafana dashboard JSON
 ├─ docs/                ▶ design.md
@@ -121,11 +143,20 @@ Distributed-Rate-Limiter/
 
 ## 🤝 Contributing
 
-PRs & issues welcome! Run `./scripts/dev-setup.sh` then:
+PRs & issues welcome! The codebase is fully debugged and ready for development. Build instructions:
 
 ```bash
+# Prerequisites: C++17, gRPC, Protobuf, hiredis, prometheus-cpp, gtest
+
 mkdir build && cd build
-cmake .. && make -j && ctest
+cmake -DWITH_RAFT=OFF ..  # Set to ON for Raft backend support
+make -j
+ctest --output-on-failure
+```
+
+**Running locally:**
+```bash
+docker-compose up --build  # Spins up server, Redis, Prometheus, Grafana
 ```
 
 ---
