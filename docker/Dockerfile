@@ -17,9 +17,10 @@ RUN apt-get update && apt-get install -y \
 
 # Build Prometheus C++ from source
 WORKDIR /build_prom
-RUN git clone https://github.com/jupp0r/prometheus-cpp.git . && \
-    mkdir build && cd build && \
-    cmake .. -DBUILD_SHARED_LIBS=ON && \
+RUN git clone --recurse-submodules https://github.com/jupp0r/prometheus-cpp.git . && \
+    git submodule update --init --recursive && \
+    mkdir -p build && cd build && \
+    cmake .. -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=ON && \
     make -j$(nproc) && \
     make install && \
     ldconfig

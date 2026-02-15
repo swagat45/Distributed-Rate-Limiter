@@ -30,11 +30,18 @@ jobs:
       - name: Build Prometheus C++ from source
         run: |
           cd /tmp
-          git clone https://github.com/jupp0r/prometheus-cpp.git
+          git clone --recurse-submodules https://github.com/jupp0r/prometheus-cpp.git
           cd prometheus-cpp
-          mkdir build && cd build
-          cmake .. -DBUILD_SHARED_LIBS=ON
-          make -j$(nproc)
+          
+          # Ensure all submodules are properly initialized and updated
+          git submodule update --init --recursive
+          
+          # Create and configure build
+          mkdir -p build && cd build
+          cmake .. -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=ON
+          
+          # Build with verbose output for debugging
+          make -j$(nproc) VERBOSE=1
           sudo make install
           sudo ldconfig
       
