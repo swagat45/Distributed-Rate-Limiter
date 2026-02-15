@@ -10,9 +10,40 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Install deps
-        run: sudo apt-get update && sudo apt-get install -y build-essential cmake libgrpc++-dev protobuf-compiler-grpc libprotobuf-dev libhiredis-dev libprometheus-cpp-dev
-      - name: Build
-        run: mkdir build && cd build && cmake .. && make -j
+      
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            cmake \
+            git \
+            libgrpc++-dev \
+            protobuf-compiler-grpc \
+            libprotobuf-dev \
+            libhiredis-dev \
+            libcurl4-openssl-dev \
+            libssl-dev \
+            googletest \
+            libgtest-dev
+      
+      - name: Build Prometheus C++ from source
+        run: |
+          cd /tmp
+          git clone https://github.com/jupp0r/prometheus-cpp.git
+          cd prometheus-cpp
+          mkdir build && cd build
+          cmake .. -DBUILD_SHARED_LIBS=ON
+          make -j$(nproc)
+          sudo make install
+          sudo ldconfig
+      
+      - name: Build Rate Limiter
+        run: |
+          mkdir build && cd build
+          cmake .. && make -j$(nproc)
+      
       - name: Run tests
-        run: echo "ctest placeholder"
+        run: |
+          cd build
+          ctest --output-on-failure
