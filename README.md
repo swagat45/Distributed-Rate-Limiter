@@ -6,7 +6,7 @@
     50 k RPS ▸ p99 < 10 ms ▸ Prometheus native ▸ drop-in Envoy / Nginx gateway ready.</em>
   </p>
   <p align="center">
-    <img alt="Language" src="https://img.shields.io/badge/C++17-blue?logo=c%2B%2B">
+    <img alt="Language" src="https://en.cppreference.com/w/cpp/17.html?logo=c%2B%2B">
     <img alt="gRPC" src="https://img.shields.io/badge/gRPC-1.60-5b9bd5?logo=grpc">
     <img alt="Redis" src="https://img.shields.io/badge/Redis-7.x-d82c20?logo=redis">
     <img alt="CI" src="https://github.com/your-user/Distributed-Rate-Limiter/actions/workflows/ci.yml/badge.svg">
