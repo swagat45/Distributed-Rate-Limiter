@@ -38,7 +38,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 # Install runtime dependencies only
 RUN apt-get update && apt-get install -y \
     libgrpc++1 \
-    libprotobuf30 \
+    libprotobuf23 \
     libhiredis0.14 \
     libcurl4 \
     libssl3
