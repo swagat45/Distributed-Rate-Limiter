@@ -1,0 +1,7 @@
+# Generated Grafana runtime state
+grafana/grafana.db
+grafana/alerting/
+grafana/csv/
+grafana/pdf/
+grafana/plugins/
+grafana/png/
