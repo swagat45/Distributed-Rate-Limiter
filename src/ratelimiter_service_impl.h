@@ -10,8 +10,14 @@ public:
     RateLimiterServiceImpl(std::unique_ptr<ITokenStore> store, Metrics* metrics);
 
     grpc::Status CheckQuota(grpc::ServerContext* context,
-                            const ratelimiter::RateLimitRequest* request,
-                            ratelimiter::RateLimitReply* response) override;
+                            const ratelimiter::CheckQuotaRequest* request,
+                            ratelimiter::CheckQuotaReply* response) override;
+    grpc::Status UpdateQuota(grpc::ServerContext* context,
+                             const ratelimiter::UpdateQuotaRequest* request,
+                             ratelimiter::UpdateQuotaReply* response) override;
+    grpc::Status UpsertClientConfig(grpc::ServerContext* context,
+                                    const ratelimiter::UpsertClientConfigRequest* request,
+                                    ratelimiter::UpsertClientConfigReply* response) override;
 private:
     std::unique_ptr<ITokenStore> store_;
     Metrics* metrics_;

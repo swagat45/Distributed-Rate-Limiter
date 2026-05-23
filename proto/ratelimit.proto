@@ -3,16 +3,53 @@ syntax = "proto3";
 package ratelimiter;
 
 service RateLimiter {
-  rpc CheckQuota (RateLimitRequest) returns (RateLimitReply);
+  rpc CheckQuota (CheckQuotaRequest) returns (CheckQuotaReply);
+  rpc UpdateQuota (UpdateQuotaRequest) returns (UpdateQuotaReply);
+  rpc UpsertClientConfig (UpsertClientConfigRequest) returns (UpsertClientConfigReply);
 }
 
-message RateLimitRequest {
-  string key = 1;
+message CheckQuotaRequest {
+  string client_id = 1;
   int32 hits = 2;
 }
 
-message RateLimitReply {
+message CheckQuotaReply {
   bool allowed = 1;
   int32 remaining = 2;
   int64 reset_after_ms = 3;
+}
+
+message UpdateQuotaRequest {
+  string client_id = 1;
+  oneof quota_operation {
+    int32 token_delta = 2;
+    int32 set_tokens = 3;
+  }
+  bool reset_refill_time = 4;
+}
+
+message UpdateQuotaReply {
+  bool applied = 1;
+  int32 remaining = 2;
+  int64 reset_after_ms = 3;
+  int32 capacity = 4;
+  int32 refill_rate_per_sec = 5;
+  int32 ttl_seconds = 6;
+}
+
+message UpsertClientConfigRequest {
+  string client_id = 1;
+  int32 capacity = 2;
+  int32 refill_rate_per_sec = 3;
+  int32 ttl_seconds = 4;
+  bool reset_quota_state = 5;
+}
+
+message UpsertClientConfigReply {
+  bool applied = 1;
+  int32 capacity = 2;
+  int32 refill_rate_per_sec = 3;
+  int32 ttl_seconds = 4;
+  int32 remaining = 5;
+  int64 reset_after_ms = 6;
 }
