@@ -9,13 +9,15 @@
 struct Metrics {
     std::shared_ptr<prometheus::Registry> registry;
     
-    // Store family pointers to keep them alive
-    std::unique_ptr<prometheus::Family<prometheus::Counter>> requests_family;
-    std::unique_ptr<prometheus::Family<prometheus::Counter>> denied_family;
-    std::unique_ptr<prometheus::Family<prometheus::Histogram>> latency_family;
+    // Families are owned by the registry; these pointers provide stable access.
+    prometheus::Family<prometheus::Counter>* requests_family;
+    prometheus::Family<prometheus::Counter>* allowed_family;
+    prometheus::Family<prometheus::Counter>* rejected_family;
+    prometheus::Family<prometheus::Histogram>* latency_family;
     
     prometheus::Counter* requests_total;
-    prometheus::Counter* denied_total;
+    prometheus::Counter* allowed_total;
+    prometheus::Counter* rejected_total;
     prometheus::Histogram* latency;
     
     Metrics();

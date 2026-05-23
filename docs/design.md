@@ -1,46 +1,58 @@
+# Distributed Rate Limiter Design
 
-# Distributed Rate Limiter – Design Doc
+## Overview
 
-## 1. Overview
-Goal: accept **CheckQuota(key, nTokens)** RPCs and guarantee per‑key rate limits
-with **p99 < 10 ms** at 50 k RPS, surviving single‑node failures.
+This service enforces per-client quotas with a token-bucket algorithm. Clients call gRPC APIs, while Redis stores both the client configuration and the live bucket state so multiple server instances can share quota decisions.
 
-## 2. API
-gRPC; proto in `proto/ratelimit.proto`.
+## Service Contract
 
-## 3. Algorithm
-* **Token‑bucket** per key.
-* Atomic update executed via **Lua script** inside Redis to avoid race conditions.
+The gRPC surface contains three RPCs:
 
-## 4. Consistency & Replication
-* Single Redis (or redis‑cluster) = source of truth.
-* Rate‑limiter nodes are stateless → horizontal scaling.
-* Future work: replace Redis with embedded **Raft** log for full consistency
-  without external dependency.
+- `CheckQuota(client_id, hits)` to consume tokens and return allow/deny state
+- `UpdateQuota(...)` to administratively add tokens or set a token count
+- `UpsertClientConfig(...)` to store per-client capacity, refill rate, and TTL
 
-## 5. Failure Handling
-| Component | Failure | Mitigation |
-|-----------|---------|------------|
-| Rate‑limiter pod | Crash | k8s restart; no state lost |
-| Redis master | Down | Redis‑Sentinel fail‑over < 250 ms |
-| Network partition | Dual writes | Clients retry on UNAVAILABLE; Lua ensures idempotency |
+The proto contract is defined in `proto/ratelimit.proto`.
 
-## 6. Observability
-* **Prometheus metrics** – requests_total, denied_total, latency histogram.
-* **Grafana dashboard** in `grafana/dashboards/`.
+## Data Model
 
-Alerts: error rate > 0.5 % for 3 m, p99 > 50 ms for 5 m.
+Each client uses two Redis keys:
 
-## 7. Performance
-Benchmarked on 3×c6g.large:
-| RPS | p50 | p99 |
-|-----|-----|-----|
-| 10 k | 2 ms | 8 ms |
-| 50 k | 4 ms | 9 ms |
+- `rl:cfg:<client_id>` stores `capacity`, `refill_rate_per_sec`, and `ttl_seconds`
+- `rl:bkt:<client_id>` stores `tokens` and `ts` for the live bucket
 
-## 8. Cost
-c6g.large ₹3.6/h → ₹18 per million requests @ 50 k RPS.
+If no config exists for a client, the server falls back to the process-level defaults from environment variables.
 
-## 9. Future Work
-* Raft‑backed state, multi‑datacenter quotas, token pre‑fetching, rate limit
-  sharing across hierarchical keys.
+Both keys are assigned expirations so inactive clients naturally age out of Redis.
+
+## Token-Bucket Behavior
+
+- Capacity defines the maximum burst size
+- Refill rate defines how many tokens are restored per second
+- Each `CheckQuota` request refills based on elapsed time, then attempts to consume `hits`
+- `reset_after_ms` reports either time until enough tokens exist for the request or time until the bucket is full again
+
+The quota consumption path is executed with a Redis Lua script so bucket updates remain atomic.
+
+## Observability
+
+The service exports four Prometheus metrics:
+
+- `ratelimiter_requests_total`
+- `ratelimiter_allowed_requests_total`
+- `ratelimiter_rejected_requests_total`
+- `ratelimiter_latency_ms`
+
+Grafana assets remain in `grafana/dashboards/`.
+
+## Validation Strategy
+
+The project uses unit tests for:
+
+- core token-bucket math
+- refill and burst edge cases
+- quota update and config reconciliation
+- gRPC service validation paths
+- metrics changes for allowed and rejected requests
+
+Local load testing uses the k6 gRPC script in `scripts/bench_k6.js` to run roughly 500-1000 quota checks and observe latency and rejection behavior.

@@ -1,0 +1,248 @@
+openapi: 3.0.3
+info:
+  title: Distributed Rate Limiter API
+  version: 1.0.0
+  description: |
+    Documentation-only OpenAPI view of the gRPC RateLimiter contract.
+    These HTTP-style endpoints are for reference in Swagger UI and do not imply
+    that this server exposes a live REST/JSON gateway.
+servers:
+  - url: http://localhost:8080
+    description: Swagger UI host only
+tags:
+  - name: RateLimiter
+    description: Token-bucket rate limiting operations
+paths:
+  /v1/check-quota:
+    post:
+      tags:
+        - RateLimiter
+      summary: Check and consume quota for a client
+      description: Mirrors the gRPC `CheckQuota` RPC.
+      operationId: checkQuota
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CheckQuotaRequest'
+            examples:
+              basic:
+                value:
+                  client_id: demo-client
+                  hits: 1
+      responses:
+        '200':
+          description: Quota decision returned successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CheckQuotaReply'
+              examples:
+                allowed:
+                  value:
+                    allowed: true
+                    remaining: 4
+                    reset_after_ms: 500
+                rejected:
+                  value:
+                    allowed: false
+                    remaining: 0
+                    reset_after_ms: 1000
+  /v1/update-quota:
+    post:
+      tags:
+        - RateLimiter
+      summary: Admin update to a client's live quota state
+      description: Mirrors the gRPC `UpdateQuota` RPC.
+      operationId: updateQuota
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateQuotaRequest'
+            examples:
+              addTokens:
+                value:
+                  client_id: demo-client
+                  token_delta: 3
+                  reset_refill_time: true
+              setTokens:
+                value:
+                  client_id: demo-client
+                  set_tokens: 5
+                  reset_refill_time: false
+      responses:
+        '200':
+          description: Quota update applied successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UpdateQuotaReply'
+  /v1/client-config:
+    post:
+      tags:
+        - RateLimiter
+      summary: Create or update per-client rate limit configuration
+      description: Mirrors the gRPC `UpsertClientConfig` RPC.
+      operationId: upsertClientConfig
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpsertClientConfigRequest'
+            examples:
+              createConfig:
+                value:
+                  client_id: demo-client
+                  capacity: 10
+                  refill_rate_per_sec: 5
+                  ttl_seconds: 300
+                  reset_quota_state: true
+      responses:
+        '200':
+          description: Client configuration stored successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UpsertClientConfigReply'
+components:
+  schemas:
+    CheckQuotaRequest:
+      type: object
+      required:
+        - client_id
+        - hits
+      properties:
+        client_id:
+          type: string
+          description: Unique client identifier used as the rate-limiting key.
+        hits:
+          type: integer
+          format: int32
+          minimum: 1
+          description: Number of tokens to consume from the bucket.
+    CheckQuotaReply:
+      type: object
+      required:
+        - allowed
+        - remaining
+        - reset_after_ms
+      properties:
+        allowed:
+          type: boolean
+          description: Whether the request was allowed.
+        remaining:
+          type: integer
+          format: int32
+          description: Remaining whole tokens after the decision.
+        reset_after_ms:
+          type: integer
+          format: int64
+          description: Milliseconds until the bucket refills enough for the request or becomes full.
+    UpdateQuotaRequest:
+      type: object
+      required:
+        - client_id
+      properties:
+        client_id:
+          type: string
+        token_delta:
+          type: integer
+          format: int32
+          description: Add or subtract tokens from the current bucket state.
+        set_tokens:
+          type: integer
+          format: int32
+          description: Replace the current bucket token count directly.
+        reset_refill_time:
+          type: boolean
+          default: false
+          description: Whether to reset refill timing when the update is applied.
+      description: Exactly one of `token_delta` or `set_tokens` should be provided, mirroring the proto `oneof`.
+      oneOf:
+        - required:
+            - token_delta
+        - required:
+            - set_tokens
+    UpdateQuotaReply:
+      type: object
+      required:
+        - applied
+        - remaining
+        - reset_after_ms
+        - capacity
+        - refill_rate_per_sec
+        - ttl_seconds
+      properties:
+        applied:
+          type: boolean
+        remaining:
+          type: integer
+          format: int32
+        reset_after_ms:
+          type: integer
+          format: int64
+        capacity:
+          type: integer
+          format: int32
+        refill_rate_per_sec:
+          type: integer
+          format: int32
+        ttl_seconds:
+          type: integer
+          format: int32
+    UpsertClientConfigRequest:
+      type: object
+      required:
+        - client_id
+        - capacity
+        - refill_rate_per_sec
+        - ttl_seconds
+      properties:
+        client_id:
+          type: string
+        capacity:
+          type: integer
+          format: int32
+          minimum: 1
+        refill_rate_per_sec:
+          type: integer
+          format: int32
+          minimum: 1
+        ttl_seconds:
+          type: integer
+          format: int32
+          minimum: 1
+        reset_quota_state:
+          type: boolean
+          default: false
+    UpsertClientConfigReply:
+      type: object
+      required:
+        - applied
+        - capacity
+        - refill_rate_per_sec
+        - ttl_seconds
+        - remaining
+        - reset_after_ms
+      properties:
+        applied:
+          type: boolean
+        capacity:
+          type: integer
+          format: int32
+        refill_rate_per_sec:
+          type: integer
+          format: int32
+        ttl_seconds:
+          type: integer
+          format: int32
+        remaining:
+          type: integer
+          format: int32
+        reset_after_ms:
+          type: integer
+          format: int64
