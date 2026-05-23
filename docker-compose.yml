@@ -1,8 +1,12 @@
+<<<<<<< HEAD
 
+=======
+>>>>>>> f52492ea1f638072505f9ced538d5dadf7390c6b
 services:
   redis:
     image: redis:7.2-alpine
-    ports: ["6379:6379"]
+    ports:
+      - "6379:6379"
 
   ratelimiter:
     build:
@@ -11,6 +15,7 @@ services:
     environment:
       - REDIS_HOST=redis
       - BIND_ADDR=0.0.0.0:50051
+      - PROM_ADDR=0.0.0.0:9102
     depends_on:
       - redis
     ports:
@@ -20,8 +25,11 @@ services:
   prometheus:
     image: prom/prometheus:v2.52.0
     volumes:
-      - ./docker/prometheus.yml:/etc/prometheus/prometheus.yml
-    ports: ["9090:9090"]
+      - ./docker/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "9090:9090"
+    depends_on:
+      - ratelimiter
 
   grafana:
     image: grafana/grafana-oss:10.4.2
@@ -29,4 +37,16 @@ services:
       - GF_SECURITY_ADMIN_PASSWORD=admin
     volumes:
       - ./grafana:/var/lib/grafana
-    ports: ["3000:3000"]
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus
+
+  swagger-ui:
+    image: swaggerapi/swagger-ui:v5.17.14
+    environment:
+      - SWAGGER_JSON=/openapi/openapi.yaml
+    volumes:
+      - ./docs/openapi.yaml:/openapi/openapi.yaml:ro
+    ports:
+      - "8080:8080"

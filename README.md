@@ -1,168 +1,187 @@
+# Distributed Rate Limiter
 
-<p align="center">
-  <h2 align="center">🚦 Distributed-Rate-Limiter</h2>
-  <p align="center">
-    <em>Ultra-light, distributed token-bucket rate-limiter written in modern C++17.<br>
-    50 k RPS ▸ p99 < 10 ms ▸ Prometheus native ▸ drop-in Envoy / Nginx gateway ready.</em>
-  </p>
-  <p align="center">
-    <img alt="Language" src="https://en.cppreference.com/w/cpp/17.html?logo=c%2B%2B">
-    <img alt="gRPC" src="https://img.shields.io/badge/gRPC-1.60-5b9bd5?logo=grpc">
-    <img alt="Redis" src="https://img.shields.io/badge/Redis-7.x-d82c20?logo=redis">
-    <img alt="CI" src="https://github.com/your-user/Distributed-Rate-Limiter/actions/workflows/ci.yml/badge.svg">
-    <img alt="License" src="https://img.shields.io/badge/MIT-green">
-  </p>
-</p>
+A C++17 distributed rate limiter built around a token-bucket algorithm, gRPC APIs, Redis-backed shared state, Prometheus metrics, Docker-based verification, and Swagger-backed API documentation.
 
----
+## What This Project Demonstrates
 
-## ✨ Why you might care
+- Token-bucket request throttling with refill timing and burst handling
+- Three gRPC APIs for quota checks, quota updates, and per-client config management
+- Redis-backed per-client config and bucket state with atomic quota consumption
+- Prometheus metrics for total requests, allowed requests, rejected requests, and latency
+- Docker-first build and test verification
+- Swagger UI documentation for the gRPC contract through a checked-in OpenAPI file
 
-| What you get | Details |
-|--------------|---------|
-| 🚀 **Speed** | Sustains **50 000 req/s, p99 = 9 ms** on 3 × c6g.large |
-| 🔒 **Correctness** | Single-round-trip Lua script guarantees **atomic** token updates (no race / double-spend) |
-| 📈 **Observability-first** | 11 Prometheus SLIs, ready-made Grafana dashboard, alert rules (>0.5% deny rate) |
-| ♻️ **Stateless → horizontal scale** | Pods share state via Redis Cluster; optional Raft backend → master-less |
-| 🛠 **Dev-ready** | 1-command `docker-compose up` spins server + Redis + Prometheus + Grafana |
-| ✅ **CI + tests** | GitHub Actions builds on every commit; Google-Test suite blocks regressions |
+## Architecture
 
----
+```text
+gRPC client
+    |
+    v
+RateLimiter service (C++)
+    |
+    +-- Token bucket math
+    +-- Prometheus metrics
+    |
+    v
+Redis
+    +-- rl:cfg:<client_id>   per-client capacity/refill/ttl
+    +-- rl:bkt:<client_id>   current tokens + last refill timestamp
 
-## 🐛 Recent Fixes & Improvements
-
-The codebase has been debugged and hardened with the following improvements:
-
-- ✅ **Token Bucket Implementation** – Complete token-bucket algorithm with proper time-based refill
-- ✅ **Lua Script Correctness** – Fixed reset-time calculations for accurate quota reporting  
-- ✅ **Metrics Stability** – Resolved use-after-free bugs in Prometheus metric pointers
-- ✅ **Redis Resilience** – Added connection timeouts (1.5s) and comprehensive error handling
-- ✅ **Type Safety** – Added reply type validation and connection state checks
-- ✅ **Client Clarity** – Improved output formatting with field labels and error messages
-- ✅ **Build Configuration** – Fixed CMakeLists.txt to properly include all dependencies
-
----
-
-## 🏗 Architecture (high level)
-
-```
-Client ──gRPC──▶ Rate-Limiter Pods (stateless C++)
-                       │ hiredis + Lua (atomic)
-                       ▼
-             Redis Cluster (6 shards, AOF)
-                       ▲
-         Prometheus scrape 15 s
-                       │
-         Grafana dashboard & alerts
+Swagger UI
+    |
+    +-- renders docs/openapi.yaml for humans
 ```
 
-*Pluggable `RaftStore` keeps the same interface, so swapping Redis ↔ Raft means no API change.*
+The service is stateless apart from Redis, so multiple server instances can share the same quota state.
 
----
+## gRPC API
 
-## 🔧 Quick start (local)
-
-```bash
-git clone https://github.com/your-user/Distributed-Rate-Limiter.git
-cd Distributed-Rate-Limiter
-docker-compose up --build
-```
-
-| Service      | Port   | Notes                                |
-|--------------|--------|--------------------------------------|
-| rate-limiter | **50051** | gRPC (`RateLimiter::CheckQuota`)    |
-| metrics      | **9102** | Prometheus scrape endpoint          |
-| Prometheus UI| **9090** | http://localhost:9090               |
-| Grafana      | **3000** | http://localhost:3000 *(admin/admin)* |
-
----
-
-## 🚨 API
+The service definition lives in [proto/ratelimit.proto](/d:/Swagat%20Suman%20Mishra/CORE%20PROJECTS/Distributed-Rate-Limiter/proto/ratelimit.proto:1).
 
 ```proto
-rpc CheckQuota (RateLimitRequest) returns (RateLimitReply);
-
-message RateLimitRequest { string key = 1; int32 hits = 2; }
-message RateLimitReply   { bool allowed = 1; int32 remaining = 2; int64 reset_after_ms = 3; }
+service RateLimiter {
+  rpc CheckQuota(CheckQuotaRequest) returns (CheckQuotaReply);
+  rpc UpdateQuota(UpdateQuotaRequest) returns (UpdateQuotaReply);
+  rpc UpsertClientConfig(UpsertClientConfigRequest) returns (UpsertClientConfigReply);
+}
 ```
+
+- `CheckQuota` consumes tokens for a client and returns `allowed`, `remaining`, and `reset_after_ms`
+- `UpdateQuota` is an admin API that either adds tokens or sets the current token count
+- `UpsertClientConfig` stores per-client `capacity`, `refill_rate_per_sec`, and `ttl_seconds`, with optional quota reset
+
+## Docker Verification
+
+Docker is the primary verification path for this repo. The image build now performs a real compile and test pass during the build stage.
+
+### 1. Build From Scratch
+
+```bash
+docker compose build --no-cache
+```
+
+Expected result:
+
+- the build stage installs dependencies
+- CMake configures the project
+- all binaries compile
+- `ctest --output-on-failure` passes before the runtime image is produced
+
+### 2. Start The Stack
+
+```bash
+docker compose up -d
+```
+
+Services and ports:
+
+- `50051` gRPC rate limiter
+- `9102` Prometheus metrics endpoint
+- `9090` Prometheus UI
+- `3000` Grafana
+- `8080` Swagger UI
+
+### 3. Inspect Logs
+
+```bash
+docker compose logs ratelimiter
+```
+
+Expected result:
+
+- the server starts successfully
+- it binds to `0.0.0.0:50051`
+- it exposes metrics on `0.0.0.0:9102`
+
+### 4. Run A Real gRPC Smoke Test
+
+The runtime image now includes the example client binary, so you can execute it inside the running service container:
+
+```bash
+docker compose exec ratelimiter /usr/local/bin/ratelimiter_client localhost:50051 smoke-client
+```
+
+Expected result:
+
+- `UpsertClientConfig` succeeds
+- repeated `CheckQuota` calls show allowed and eventually rejected behavior
+- `UpdateQuota` succeeds
+- a final quota check succeeds after the update
+
+### 5. Verify Metrics
+
+Open `http://localhost:9102/metrics` and confirm these metrics appear:
+
+- `ratelimiter_requests_total`
+- `ratelimiter_allowed_requests_total`
+- `ratelimiter_rejected_requests_total`
+- `ratelimiter_latency_ms`
+
+### 6. Shut Down
+
+```bash
+docker compose down
+```
+
+## Swagger UI
+
+Swagger documentation is served from the checked-in OpenAPI file at [docs/openapi.yaml](/d:/Swagat%20Suman%20Mishra/CORE%20PROJECTS/Distributed-Rate-Limiter/docs/openapi.yaml:1).
+
+Start the stack and open:
+
+```text
+http://localhost:8080
+```
+
+Important note:
+
+- Swagger UI in this repo is documentation for the gRPC contract
+- it does not mean the server exposes a live REST/JSON gateway
+- the OpenAPI file provides HTTP-style representations only to make the API browsable and easier to discuss
+
+## Manual Native Build
+
+If you later install a native toolchain, you can still build locally without Docker:
+
+```bash
+mkdir build
+cd build
+cmake -DWITH_RAFT=OFF ..
+cmake --build .
+ctest --output-on-failure
+```
+
+## Load Testing
+
+The local k6 script in [scripts/bench_k6.js](/d:/Swagat%20Suman%20Mishra/CORE%20PROJECTS/Distributed-Rate-Limiter/scripts/bench_k6.js:1) uses k6's gRPC client and runs `1000` total `CheckQuota` calls after seeding a client config.
 
 Example:
 
 ```bash
-grpcurl -d '{"key":"user123","hits":1}' localhost:50051 \
-        ratelimiter.RateLimiter/CheckQuota
+k6 run scripts/bench_k6.js
 ```
 
----
+If `k6` is not installed on your machine, keep it as an optional follow-up step after Docker verification.
 
-## 📊 Benchmarks (ARM c6g.large · 3-node)
+## Tests
 
-| Load (RPS) | p50 (ms) | p99 (ms) | CPU  | Memory |
-|------------|----------|----------|------|--------|
-| 10 000     | 2.1      | 6.8      | 25%  | 80 MiB |
-| 25 000     | 3.4      | 7.9      | 41%  | 86 MiB |
-| 50 000     | 4.7      | 9.2      | 55%  | 90 MiB |
+The test suite covers:
 
-> Numbers produced with [`scripts/bench_k6.js`](scripts/bench_k6.js).
+- token consumption and rejection
+- refill timing
+- burst handling and clamping
+- invalid token and config inputs
+- quota update behavior
+- config reconciliation
+- service validation and status codes
+- metric increments for allowed and rejected requests
 
----
+## Repository Layout
 
-## 🗄️ Directory layout
-
-```
-Distributed-Rate-Limiter/
-├─ proto/               ▶ ratelimit.proto (gRPC service definition)
-├─ src/
-│  ├─ server.cpp                 ▶ gRPC server with Prometheus metrics
-│  ├─ ratelimiter_service_impl.*  ▶ CheckQuota RPC implementation
-│  ├─ token_bucket.h             ▶ Token-bucket algorithm (in-memory reference)
-│  ├─ redis_store.*              ▶ Redis backend with atomic Lua scripts
-│  ├─ metrics.*                  ▶ Prometheus counter/histogram collectors
-│  ├─ backend_interface.h        ▶ ITokenStore abstraction
-│  ├─ client.cpp                 ▶ Example gRPC client
-│  └─ raft_store.* (optional)    ▶ Raft-backed store (enabled with -DWITH_RAFT=ON)
-├─ tests/               ▶ Google-Test unit cases
-├─ docker/              ▶ Dockerfile, prometheus.yml
-├─ grafana/dashboards/  ▶ Grafana dashboard JSON
-├─ docs/                ▶ design.md
-├─ scripts/             ▶ bench_k6.js
-├─ .github/             ▶ workflows/ci.yml
-└─ README.md            ▶ You are here!
-```
-
----
-
-## 🔭 Roadmap
-
-- **Raft integration** (NuRaft) for master-less consistency  
-- **Hierarchical limits** (org → user → API key)  
-- **Token pre-fetch** to shave another 1 ms off p99  
-- **gRPC streaming** for batch quota checks  
-
----
-
-## 🤝 Contributing
-
-PRs & issues welcome! The codebase is fully debugged and ready for development. Build instructions:
-
-```bash
-# Prerequisites: C++17, gRPC, Protobuf, hiredis, prometheus-cpp, gtest
-
-mkdir build && cd build
-cmake -DWITH_RAFT=OFF ..  # Set to ON for Raft backend support
-make -j
-ctest --output-on-failure
-```
-
-**Running locally:**
-```bash
-docker-compose up --build  # Spins up server, Redis, Prometheus, Grafana
-```
-
----
-
-## 📜 License
-
-[MIT](LICENSE)
-
-```
+- `proto/` gRPC contract
+- `src/` server, client, Redis store, metrics, token-bucket logic
+- `tests/` unit tests
+- `scripts/` local load testing
+- `docker/` container and Prometheus config
+- `docs/` design notes and OpenAPI spec
+- `grafana/` dashboard assets
